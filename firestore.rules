@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+         (request.auth.token.email == "sreyaaskomrewar555@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isApproved() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    // Users collection - Public for admin convenience as requested
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // VC Profiles - Public for admin convenience as requested
+    match /vcs/{userId} {
+      allow read, write: if true;
+    }
+
+    // Startup Profiles - Public for admin convenience as requested
+    match /startups/{userId} {
+      allow read, write: if true;
+    }
+
+    // Swipes
+    match /swipes/{swipeId} {
+      allow read: if isAuthenticated() && (resource.data.vcId == request.auth.uid || isAdmin());
+      allow create: if isApproved() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'vc';
+    }
+
+    // Chats
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow create: if isApproved();
+      allow update: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
+    }
+
+    // Messages
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow create: if isApproved();
+    }
+
+    // Meetings
+    match /meetings/{meetingId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.vcId || request.auth.uid == resource.data.startupId || isAdmin());
+      allow create: if isApproved();
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.vcId || request.auth.uid == resource.data.startupId || isAdmin());
+    }
+
+    // Hungry Investors
+    match /hungryInvestors/{oppId} {
+      allow read: if isApproved() || isAdmin();
+      allow create: if isApproved() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'vc';
+      allow update: if isApproved() || isAdmin();
+      allow delete: if isAdmin() || (isApproved() && resource.data.vcId == request.auth.uid);
+    }
+
+    // Profile Views
+    match /profileViews/{viewId} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow create: if isAuthenticated();
+    }
+
+    // User Tracking
+    match /userTracking/{trackId} {
+      allow read, write: if true;
+    }
+  }
+}
